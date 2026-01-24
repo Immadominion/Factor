@@ -1,12 +1,13 @@
 import 'dart:math' as math;
 import 'dart:ui';
 
+import 'package:factor/src/config.dart';
 import 'package:factor/view/components/neumorphic_card.dart';
 import 'package:factor/view_model/exchange_rate_calculator.dart';
 import 'package:factor/view_model/theme_controller.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -24,10 +25,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late Future<PackageInfo> _packageInfoFuture;
   final LayerLink _themeMenuLink = LayerLink();
   bool _isThemeMenuOpen = false;
+  bool _isSelectingTheme = false;
 
-  static final Uri _iosStoreUri = Uri.parse(
-    'https://apps.apple.com/us/app/factor-exchange/id000000000',
-  );
   static final Uri _feedbackMailUri = Uri(
     scheme: 'mailto',
     path: 'immadotdev@gmail.com',
@@ -55,24 +54,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final themeController = context.watch<ThemeController>();
     final currentThemeMode = themeController.themeMode;
 
-    return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(
-        backgroundColor: theme.scaffoldBackgroundColor,
-        elevation: 0,
-        centerTitle: true,
-        title: Text(
-          'Settings',
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.w700,
-            color: theme.colorScheme.primary,
+    return Stack(
+      children: [
+        Scaffold(
+          backgroundColor: theme.scaffoldBackgroundColor,
+          appBar: AppBar(
+            backgroundColor: theme.scaffoldBackgroundColor,
+            elevation: 0,
+            centerTitle: true,
+            title: Text(
+              'Settings',
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: theme.colorScheme.primary,
+              ),
+            ),
           ),
-        ),
-      ),
-      body: SafeArea(
-        child: Stack(
-          children: [
-            Column(
+          body: SafeArea(
+            child: Column(
               children: [
                 Expanded(
                   child: ListView(
@@ -93,8 +92,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Icon(
-                              PhosphorIconsRegular.palette,
+                              FactorIcons.palette,
                               color: theme.colorScheme.primary,
+                              size: FactorIcons.defaultSize,
                             ),
                             const SizedBox(width: 16),
                             Expanded(
@@ -138,8 +138,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           children: [
                             SwitchListTile.adaptive(
                               secondary: Icon(
-                                PhosphorIconsRegular.vibrate,
+                                FactorIcons.vibrate,
                                 color: theme.colorScheme.primary,
+                                size: FactorIcons.defaultSize,
                               ),
                               contentPadding: const EdgeInsets.symmetric(
                                 horizontal: 20,
@@ -159,8 +160,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             const Divider(height: 1),
                             SwitchListTile.adaptive(
                               secondary: Icon(
-                                PhosphorIconsRegular.waveform,
+                                FactorIcons.waveform,
                                 color: theme.colorScheme.primary,
+                                size: FactorIcons.defaultSize,
                               ),
                               contentPadding: const EdgeInsets.symmetric(
                                 horizontal: 20,
@@ -181,31 +183,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                       ),
                       const SizedBox(height: 24),
-                      const _SectionHeading(label: 'Rate Factor'),
-                      const SizedBox(height: 12),
-                      NeumorphicCard(
-                        borderRadius: 24,
-                        padding: EdgeInsets.zero,
-                        child: Column(
-                          children: [
-                            _LinkTile(
-                              title: 'Rate on the App Store',
-                              subtitle:
-                                  'Leave a review for fellow Factor traders.',
-                              icon: PhosphorIconsRegular.storefront,
-                              onTap: () => _launchUri(_iosStoreUri),
-                            ),
-                            // const Divider(height: 1),
-                            // _LinkTile(
-                            //   title: 'Rate on Solana dApp Store',
-                            //   subtitle: 'Help others discover Factor on Solana.',
-                            //   icon: PhosphorIconsRegular.compass,
-                            //   onTap: () => _launchUri(_solanaDappStoreUri),
-                            // ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 24),
                       const _SectionHeading(label: 'Stay in touch'),
                       const SizedBox(height: 12),
                       NeumorphicCard(
@@ -216,7 +193,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             _LinkTile(
                               title: 'Share feedback',
                               subtitle: 'immadotdev@gmail.com',
-                              icon: PhosphorIconsRegular.envelope,
+                              icon: FactorIcons.envelope,
                               onTap: () => _launchUri(_feedbackMailUri),
                             ),
                             const Divider(height: 1),
@@ -224,7 +201,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               title: 'About the developers',
                               subtitle:
                                   'ClevaLabs builds polished web3 experiences. Let’s ship yours.',
-                              icon: PhosphorIconsRegular.usersThree,
+                              icon: FactorIcons.users,
                               onTap: () => _launchUri(_clevaLabsUri),
                             ),
                           ],
@@ -267,12 +244,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           _BottomLink(
                             label: 'Terms of Service',
                             onTap: () => _launchUri(_termsUri),
-                            icon: PhosphorIconsRegular.scroll,
+                            icon: FactorIcons.scroll,
                           ),
                           _BottomLink(
                             label: 'Privacy Policy',
                             onTap: () => _launchUri(_privacyUri),
-                            icon: PhosphorIconsRegular.shieldCheck,
+                            icon: FactorIcons.shieldCheck,
                           ),
                         ],
                       ),
@@ -281,38 +258,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ],
             ),
-            if (_isThemeMenuOpen)
-              Positioned.fill(
-                child: Stack(
-                  children: [
-                    ClipRect(
-                      child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-                        child: Container(
-                          color: Colors.black.withValues(alpha: 0.12),
-                        ),
-                      ),
-                    ),
-                    GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: _closeThemeMenu,
-                    ),
-                    CompositedTransformFollower(
-                      link: _themeMenuLink,
-                      targetAnchor: Alignment.center,
-                      followerAnchor: Alignment.center,
-                      child: _ThemeRadialMenu(
-                        selected: currentThemeMode,
-                        onSelect: _selectTheme,
-                        onClose: _closeThemeMenu,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-          ],
+          ),
         ),
-      ),
+        if (_isThemeMenuOpen)
+          Positioned.fill(
+            child: Stack(
+              children: [
+                ClipRect(
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+                    child: Container(
+                      color: Colors.black.withValues(alpha: 0.12),
+                    ),
+                  ),
+                ),
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _closeThemeMenu,
+                ),
+                CompositedTransformFollower(
+                  link: _themeMenuLink,
+                  targetAnchor: Alignment.center,
+                  followerAnchor: Alignment.center,
+                  child: _ThemeRadialMenu(
+                    selected: currentThemeMode,
+                    onSelect: _selectTheme,
+                    onClose: _closeThemeMenu,
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 
@@ -331,8 +308,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _selectTheme(ThemeMode mode) {
+    if (_isSelectingTheme) return;
+    _isSelectingTheme = true;
     context.read<ThemeController>().setTheme(mode);
     _closeThemeMenu();
+    // Reset debounce after a short delay to allow animation to complete
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (mounted) {
+        _isSelectingTheme = false;
+      }
+    });
   }
 
   String _themeLabel(ThemeMode mode) {
@@ -392,12 +377,10 @@ class _ThemeMenuButton extends StatelessWidget {
               child: ScaleTransition(scale: animation, child: child),
             ),
             child: Icon(
-              isOpen
-                  ? PhosphorIconsRegular.xCircle
-                  : PhosphorIconsRegular.caretDown,
+              isOpen ? FactorIcons.closeCircle : FactorIcons.chevronDown,
               key: ValueKey<bool>(isOpen),
               color: theme.colorScheme.primary,
-              size: 24,
+              size: FactorIcons.defaultSize,
             ),
           ),
         ),
@@ -426,18 +409,10 @@ class _ThemeRadialMenu extends StatelessWidget {
     _ThemeOption(
       mode: ThemeMode.system,
       label: 'System',
-      icon: PhosphorIconsRegular.deviceMobile,
+      icon: FactorIcons.deviceMobile,
     ),
-    _ThemeOption(
-      mode: ThemeMode.light,
-      label: 'Light',
-      icon: PhosphorIconsRegular.sun,
-    ),
-    _ThemeOption(
-      mode: ThemeMode.dark,
-      label: 'Dark',
-      icon: PhosphorIconsRegular.moonStars,
-    ),
+    _ThemeOption(mode: ThemeMode.light, label: 'Light', icon: FactorIcons.sun),
+    _ThemeOption(mode: ThemeMode.dark, label: 'Dark', icon: FactorIcons.moon),
   ];
 
   @override
@@ -461,9 +436,9 @@ class _ThemeRadialMenu extends StatelessWidget {
                   padding: const EdgeInsets.all(16),
                   borderRadius: _menuSize / 20,
                   child: Icon(
-                    PhosphorIconsRegular.x,
+                    FactorIcons.close,
                     color: Theme.of(context).colorScheme.primary,
-                    size: 22,
+                    size: 22.r,
                   ),
                 ),
               ),
@@ -528,7 +503,7 @@ class _ThemeOptionButton extends StatelessWidget {
               color: selected
                   ? theme.colorScheme.primary
                   : theme.colorScheme.primary.withValues(alpha: 0.75),
-              size: 26,
+              size: 26.r,
             ),
           ),
         ),
@@ -567,12 +542,17 @@ class _LinkTile extends StatelessWidget {
     final theme = Theme.of(context);
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-      leading: Icon(icon, color: theme.colorScheme.primary),
+      leading: Icon(
+        icon,
+        color: theme.colorScheme.primary,
+        size: FactorIcons.defaultSize,
+      ),
       title: Text(title),
       subtitle: Text(subtitle),
       trailing: Icon(
-        PhosphorIconsRegular.arrowUpRight,
+        FactorIcons.arrowUpRight,
         color: theme.colorScheme.primary,
+        size: FactorIcons.defaultSize,
       ),
       onTap: onTap,
     );
@@ -601,7 +581,7 @@ class _BottomLink extends StatelessWidget {
           Icon(
             icon,
             color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-            size: 14,
+            size: 14.r,
           ),
           const SizedBox(width: 4),
           Text(

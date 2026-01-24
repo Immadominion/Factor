@@ -1,6 +1,7 @@
 import 'package:factor/src/components.dart';
 import 'package:factor/src/config.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 class FactorsAppBars {
   ///Creates an appbar for both `Select Currency and Coin screen`.
@@ -20,7 +21,11 @@ class FactorsAppBars {
               onTap: () {
                 Navigator.pop(context);
               },
-              child: Icon(Icons.arrow_back_sharp, color: FactorColorsDark.kSoftWhite, size: 25),
+              child: Icon(
+                FactorIcons.arrowLeft,
+                color: FactorColorsDark.kSoftWhite.withAlpha(200),
+                size: 26.r,
+              ),
             ),
             Gap(20),
             TextView(text: title, fontWeight: FontWeight.bold, fontSize: 18),
@@ -32,7 +37,11 @@ class FactorsAppBars {
           onTap: onSearchOnTap,
           child: Padding(
             padding: EdgeInsetsGeometry.only(right: 15),
-            child: Icon(Icons.search_rounded, color: FactorColorsDark.kSoftWhite, size: 28),
+            child: Icon(
+              FactorIcons.search,
+              color: FactorColorsDark.kSoftWhite.withAlpha(200),
+              size: 28.r,
+            ),
           ),
         ),
       ],
@@ -80,7 +89,11 @@ class FactorsAppBars {
                     shape: BoxShape.circle,
                     color: FactorColorsDark.kCharcoal,
                   ),
-                  child: Icon(Icons.close, size: 15, color: FactorColorsDark.kSoftWhite),
+                  child: Icon(
+                    FactorIcons.close,
+                    size: 15.r,
+                    color: FactorColorsDark.kSoftWhite.withAlpha(200),
+                  ),
                 ),
               ),
             ),
@@ -95,7 +108,11 @@ class FactorsAppBars {
         ),
       ),
       actions: [
-        SizedBox(height: 15, width: 10, child: VerticalDivider(color: FactorColorsDark.kCharcoal)),
+        SizedBox(
+          height: 15,
+          width: 10,
+          child: VerticalDivider(color: FactorColorsDark.kCharcoal),
+        ),
         Gap(30),
         TextView(
           text: FactorStrings.btnCancel,

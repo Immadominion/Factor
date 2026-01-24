@@ -13,24 +13,37 @@ class ThemeController extends ChangeNotifier {
 
   final Future<SharedPreferences> _preferencesFuture;
 
+  int _mutationId = 0;
+
   ThemeMode _themeMode = ThemeMode.system;
   ThemeMode get themeMode => _themeMode;
 
   Future<void> setTheme(ThemeMode mode) async {
-    if (_themeMode == mode) return;
+    _mutationId++;
+    if (_themeMode == mode) {
+      final prefs = await _preferencesFuture;
+      await prefs.setString(_themeKey, _encodeThemeMode(_themeMode));
+      return;
+    }
+
     _themeMode = mode;
     notifyListeners();
 
     final prefs = await _preferencesFuture;
-    await prefs.setString(_themeKey, _encodeThemeMode(mode));
+    await prefs.setString(_themeKey, _encodeThemeMode(_themeMode));
   }
 
   Future<void> _loadTheme() async {
+    final startedAtMutation = _mutationId;
     final prefs = await _preferencesFuture;
     final stored = prefs.getString(_themeKey);
     if (stored == null) return;
     final mode = _decodeThemeMode(stored);
     if (mode == null) return;
+
+    // If the user changed theme while we were loading, do not overwrite.
+    if (startedAtMutation != _mutationId) return;
+
     _themeMode = mode;
     notifyListeners();
   }

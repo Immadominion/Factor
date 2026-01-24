@@ -1,0 +1,60 @@
+publisher:
+  name: Factor
+  website: https://website-tawny-five-47.vercel.app
+  email: immadotdev@gmail.com
+  support_email: immadotdev@gmail.com
+app:
+  name: Factor
+  address: 3QLAcJTWdNaUMmQuumvpzK9a6pFsCcEGvriRBAyvXnp5
+  android_package: com.factor
+  urls:
+    license_url: https://website-tawny-five-47.vercel.app/license
+    copyright_url: https://website-tawny-five-47.vercel.app/copyright
+    privacy_policy_url: https://website-tawny-five-47.vercel.app/privacy-policy
+    website: https://website-tawny-five-47.vercel.app
+  media:
+    - purpose: icon
+      uri: media/icon.png
+release:
+  address: j6Fw32mDfDecBqgdUHXDfXpZR22G5fzTc6L5FVmS4tG
+  media:
+    - purpose: icon
+      uri: media/icon.png
+    - purpose: banner
+      uri: media/banner.png
+    - purpose: featureGraphic
+      uri: media/feature_graphic.png
+    - purpose: screenshot
+      uri: media/screenshot1.png
+    - purpose: screenshot
+      uri: media/screenshot2.png
+    - purpose: screenshot
+      uri: media/screenshot3.png
+    - purpose: screenshot
+      uri: media/screenshot4.png
+  files:
+    - purpose: install
+      uri: files/app-release.apk
+  catalog:
+    en-US:
+      name: Factor
+      short_description: View crypto price in fiat
+      long_description: Factor is a simple app that allows you to view cryptocurrency prices in your preferred fiat currency. With support for multiple blockchains and fiat currencies, you can easily track the value of your assets on the go.
+      new_in_version: First release, Select token, select fiat, view price, theming, more to come!
+      saga_features: <<[Optional.] ANY_FEATURES_ONLY_AVAILBLE_WHEN_RUNNING_ON_SAGA>>
+  android_details:
+    cert_fingerprint: bc745a3cee043e9ed86d9772c0cf05da4ab4d303afa05fc31d070f6d377e1193
+    min_sdk: 24
+    version: 1.0.0
+    version_code: 3
+    locales:
+      - en-US
+      - <Add more supported locales>
+solana_mobile_dapp_publisher_portal:
+  testing_instructions: To Test the app, download the APK from the 'files' section and install it on your device. Open the app, then you can calcuate any token amount in fiat by using the search for either the token or the fiat currency. You should also check out the settings page to see the various options available.
+lastSubmittedVersionOnChain:
+  address: j6Fw32mDfDecBqgdUHXDfXpZR22G5fzTc6L5FVmS4tG
+  version_code: 3
+  apk_hash: RU7puvxtgMhFQRL7EqacKWqM5Y3gLd14Q3UsY+JMAEA=
+lastUpdatedVersionOnStore:
+  address: j6Fw32mDfDecBqgdUHXDfXpZR22G5fzTc6L5FVmS4tG

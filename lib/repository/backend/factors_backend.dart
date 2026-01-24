@@ -3,6 +3,13 @@ import 'package:factor/model/response/price_response_model.dart';
 import 'package:factor/model/response/token_response_model.dart';
 import 'package:factor/src/repository.dart';
 
+/// Backend for Jupiter API (Solana tokens).
+///
+/// This is the PRIMARY source for Solana tokens, including:
+/// - Verified tokens
+/// - LSTs (Liquid Staking Tokens)
+/// - Pump.fun launches
+/// - Any tradable token on Jupiter
 class FactorsBackend extends ApiServices {
   Future<TokenPrice> getPriceBackend(String id) async {
     final response = await get(uri: priceInUSDUri(id), header: apiHeader);
@@ -24,14 +31,14 @@ class FactorsBackend extends ApiServices {
     if (response is List) {
       for (final item in response) {
         if (item is Map<String, dynamic>) {
-          tokens.add(TokenResponseModel.fromJson(item));
+          tokens.add(_parseJupiterToken(item));
         }
       }
     } else if (response is Map<String, dynamic>) {
       if (response['tokens'] is List) {
         for (final item in response['tokens'] as List) {
           if (item is Map<String, dynamic>) {
-            tokens.add(TokenResponseModel.fromJson(item));
+            tokens.add(_parseJupiterToken(item));
           }
         }
       } else {
@@ -39,7 +46,7 @@ class FactorsBackend extends ApiServices {
           if (value is List) {
             for (final item in value) {
               if (item is Map<String, dynamic>) {
-                tokens.add(TokenResponseModel.fromJson(item));
+                tokens.add(_parseJupiterToken(item));
               }
             }
           }
@@ -78,7 +85,7 @@ class FactorsBackend extends ApiServices {
         return;
       }
       if (payload is Map<String, dynamic>) {
-        results.add(TokenResponseModel.fromJson(payload));
+        results.add(_parseJupiterToken(payload));
       }
     }
 
@@ -98,5 +105,28 @@ class FactorsBackend extends ApiServices {
         (a, b) => compareAsciiLowerCaseNatural(a.symbol ?? '', b.symbol ?? ''),
       );
     return cleaned;
+  }
+
+  /// Parse a Jupiter API token response, always tagging as Solana
+  TokenResponseModel _parseJupiterToken(Map<String, dynamic> json) {
+    return TokenResponseModel(
+      id: json['id'] as String?,
+      name: json['name'] as String?,
+      symbol: json['symbol'] as String?,
+      icon: json['icon'] as String?,
+      decimals: (json['decimals'] as num?)?.toInt(),
+      circSupply: (json['circSupply'] as num?)?.toDouble(),
+      totalSupply: (json['totalSupply'] as num?)?.toDouble(),
+      tokenProgram: json['tokenProgram'] as String?,
+      ctLikes: (json['ctLikes'] as num?)?.toInt(),
+      smartCtLikes: (json['smartCtLikes'] as num?)?.toInt(),
+      updatedAt: json['updatedAt'] as String?,
+      tags: (json['tags'] as List?)?.map((tag) => tag.toString()).toList(),
+      usdPrice: (json['usdPrice'] as num?)?.toDouble(),
+      launchpad: json['launchpad'] as String?,
+      holderCount: (json['holderCount'] as num?)?.toInt(),
+      // Jupiter tokens are always Solana
+      chainId: 'solana',
+    );
   }
 }

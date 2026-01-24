@@ -1,8 +1,10 @@
 import 'package:factor/model/response/fiat_currency_model.dart';
 import 'package:factor/model/response/token_response_model.dart';
+import 'package:factor/view/components/chain_badge.dart';
 import 'package:factor/view/components/neumorphic_card.dart';
 import 'package:factor/view/components/token_avatar.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 class ConversionSummary extends StatelessWidget {
   const ConversionSummary({
@@ -41,6 +43,7 @@ class ConversionSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -52,11 +55,7 @@ class ConversionSummary extends StatelessWidget {
           isActive: isTokenActive,
           onTileTap: onTokenTap,
           onValueTap: onTokenAmountTap,
-          leading: TokenAvatar(
-            imageUrl: token?.icon,
-            symbol: token?.symbol,
-            size: 36,
-          ),
+          leading: _TokenLeadingWithBadge(token: token),
         ),
         const SizedBox(height: 12),
         _SelectionTile(
@@ -259,11 +258,43 @@ class _ActiveBadge extends StatelessWidget {
           Text(
             'Typing',
             style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.onPrimary,
+              color: theme.colorScheme.primary,
               fontWeight: FontWeight.w600,
               height: .5,
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Token avatar with chain badge overlay for non-Solana tokens
+class _TokenLeadingWithBadge extends StatelessWidget {
+  const _TokenLeadingWithBadge({required this.token});
+
+  final TokenResponseModel? token;
+
+  @override
+  Widget build(BuildContext context) {
+    if (token == null) {
+      return TokenAvatar(imageUrl: null, symbol: null, size: 36);
+    }
+
+    return SizedBox(
+      width: 44.r,
+      height: 36.r,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          TokenAvatar(imageUrl: token!.icon, symbol: token!.symbol, size: 36),
+          // Chain badge positioned at bottom-right of avatar
+          if (!token!.isSolana)
+            Positioned(
+              right: -4.r,
+              bottom: -4.r,
+              child: ChainBadge(token: token!),
+            ),
         ],
       ),
     );

@@ -15,6 +15,7 @@ class SelectCurrencyScreen extends StatefulWidget {
 
 class _SelectCurrencyScreenState extends State<SelectCurrencyScreen> {
   final TextEditingController _searchController = TextEditingController();
+  bool _isSelecting = false;
 
   @override
   void initState() {
@@ -60,11 +61,17 @@ class _SelectCurrencyScreenState extends State<SelectCurrencyScreen> {
               autofocus: true,
               decoration: InputDecoration(
                 hintText: FactorStrings.hintSearch,
-                prefixIcon: const Icon(Icons.search_rounded),
+                prefixIcon: Icon(
+                  FactorIcons.search,
+                  size: FactorIcons.defaultSize,
+                ),
                 suffixIcon: _searchController.text.isNotEmpty
                     ? IconButton(
                         onPressed: () => _searchController.clear(),
-                        icon: const Icon(Icons.close_rounded),
+                        icon: Icon(
+                          FactorIcons.close,
+                          size: FactorIcons.defaultSize,
+                        ),
                       )
                     : null,
               ),
@@ -95,15 +102,26 @@ class _SelectCurrencyScreenState extends State<SelectCurrencyScreen> {
                                 currency.code ==
                                     viewModel.selectedCurrency?.code
                                 ? Icon(
-                                    Icons.check_circle,
+                                    FactorIcons.checkCircle,
                                     color: Theme.of(
                                       context,
                                     ).colorScheme.primary,
+                                    size: FactorIcons.defaultSize,
                                   )
                                 : null,
                             onTap: () {
-                              viewModel.selectCurrency(currency);
-                              Navigator.of(context).pop();
+                              if (_isSelecting) return;
+                              _isSelecting = true;
+                              try {
+                                viewModel.selectCurrency(currency);
+                                if (context.mounted) {
+                                  Navigator.of(context).pop();
+                                }
+                              } finally {
+                                if (mounted) {
+                                  _isSelecting = false;
+                                }
+                              }
                             },
                           ),
                         );

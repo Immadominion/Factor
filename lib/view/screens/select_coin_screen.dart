@@ -1,10 +1,12 @@
 import 'package:factor/model/response/token_response_model.dart';
 import 'package:factor/src/config.dart';
 import 'package:factor/src/view_model.dart';
+import 'package:factor/view/components/chain_badge.dart';
 import 'package:factor/view/components/neumorphic_bottom_sheet.dart';
 import 'package:factor/view/components/neumorphic_selector.dart';
 import 'package:factor/view/components/token_avatar.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:provider/provider.dart';
 
 class SelectCoinScreen extends StatefulWidget {
@@ -16,6 +18,7 @@ class SelectCoinScreen extends StatefulWidget {
 
 class _SelectCoinScreenState extends State<SelectCoinScreen> {
   final TextEditingController _searchController = TextEditingController();
+  bool _isSelecting = false;
 
   @override
   void initState() {
@@ -40,14 +43,10 @@ class _SelectCoinScreenState extends State<SelectCoinScreen> {
     final tokens = viewModel.tokens;
     final isInitialLoading = viewModel.tokensLoading && tokens.isEmpty;
     final isSearching = viewModel.tokenSearchLoading;
+    final currentFilter = viewModel.chainFilter;
 
     return Padding(
-      padding: EdgeInsets.fromLTRB(
-        24,
-        0,
-        24,
-        0, 
-      ),
+      padding: EdgeInsets.fromLTRB(24, 0, 24, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -64,16 +63,28 @@ class _SelectCoinScreenState extends State<SelectCoinScreen> {
             autofocus: true,
             decoration: InputDecoration(
               hintText: FactorStrings.hintSearch,
-              prefixIcon: const Icon(Icons.search_rounded),
+              prefixIcon: Icon(
+                FactorIcons.search,
+                size: FactorIcons.defaultSize,
+              ),
               suffixIcon: _searchController.text.isNotEmpty
                   ? IconButton(
                       onPressed: () => _searchController.clear(),
-                      icon: const Icon(Icons.close_rounded),
+                      icon: Icon(
+                        FactorIcons.close,
+                        size: FactorIcons.defaultSize,
+                      ),
                     )
                   : null,
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 12),
+          // Chain filter tabs
+          _ChainFilterTabs(
+            currentFilter: currentFilter,
+            onFilterChanged: viewModel.setChainFilter,
+          ),
+          const SizedBox(height: 12),
           if (isSearching)
             const Padding(
               padding: EdgeInsets.only(bottom: 12),
@@ -82,32 +93,49 @@ class _SelectCoinScreenState extends State<SelectCoinScreen> {
           Expanded(
             child: isInitialLoading
                 ? const Center(child: CircularProgressIndicator())
+                : tokens.isEmpty
+                ? Center(
+                    child: Text(
+                      currentFilter == ChainFilter.otherChains
+                          ? 'Search to find tokens on other chains'
+                          : 'No tokens found',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).textTheme.bodySmall?.color,
+                      ),
+                    ),
+                  )
                 : ListView.builder(
                     itemCount: tokens.length,
                     itemBuilder: (context, index) {
                       final token = tokens[index];
-                      final subtitle = _buildSubtitle(token);
                       return Padding(
                         padding: const EdgeInsets.only(right: 4, left: 4),
                         child: NeumorphicSelectorTile(
                           title: token.symbol?.toUpperCase() ?? '--',
-                          subtitle: subtitle.isEmpty ? null : subtitle,
-                          leading: TokenAvatar(
-                            imageUrl: token.icon,
-                            symbol: token.symbol,
-                            size: 40,
-                          ),
+                          subtitle: token.name,
+                          leading: _TokenLeading(token: token),
                           isSelected: token.id == viewModel.selectedToken?.id,
                           trailing: token.id == viewModel.selectedToken?.id
                               ? Icon(
-                                  Icons.check_circle,
+                                  FactorIcons.checkCircle,
                                   color: Theme.of(context).colorScheme.primary,
+                                  size: FactorIcons.defaultSize,
                                 )
                               : null,
                           onTap: () async {
-                            final success = await viewModel.selectToken(token);
-                            if (success && context.mounted) {
-                              Navigator.of(context).pop();
+                            if (_isSelecting) return;
+                            _isSelecting = true;
+                            try {
+                              final success = await viewModel.selectToken(
+                                token,
+                              );
+                              if (success && context.mounted) {
+                                Navigator.of(context).pop();
+                              }
+                            } finally {
+                              if (mounted) {
+                                _isSelecting = false;
+                              }
                             }
                           },
                         ),
@@ -121,13 +149,79 @@ class _SelectCoinScreenState extends State<SelectCoinScreen> {
   }
 }
 
-String _buildSubtitle(TokenResponseModel token) {
-  final parts = <String>[];
-  if (token.name != null && token.name!.isNotEmpty) {
-    parts.add(token.name!);
+/// Chain filter tab bar widget
+class _ChainFilterTabs extends StatelessWidget {
+  const _ChainFilterTabs({
+    required this.currentFilter,
+    required this.onFilterChanged,
+  });
+
+  final ChainFilter currentFilter;
+  final ValueChanged<ChainFilter> onFilterChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: ChainFilter.values.map((filter) {
+          final isSelected = filter == currentFilter;
+          return Padding(
+            padding: EdgeInsets.only(right: 8.r),
+            child: FilterChip(
+              label: Text(filter.label),
+              selected: isSelected,
+              onSelected: (_) => onFilterChanged(filter),
+              backgroundColor: theme.colorScheme.surface,
+              selectedColor: theme.colorScheme.primaryContainer,
+              labelStyle: TextStyle(
+                fontSize: 13.sp,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                color: isSelected
+                    ? theme.colorScheme.onPrimaryContainer
+                    : theme.colorScheme.onSurface,
+              ),
+              side: BorderSide(
+                color: isSelected
+                    ? theme.colorScheme.primary.withValues(alpha: 0.5)
+                    : theme.colorScheme.outline.withValues(alpha: 0.3),
+              ),
+              padding: EdgeInsets.symmetric(horizontal: 8.r, vertical: 4.r),
+              visualDensity: VisualDensity.compact,
+            ),
+          );
+        }).toList(),
+      ),
+    );
   }
-  if (token.id != null && token.id!.isNotEmpty) {
-    parts.add(token.id!);
+}
+
+/// Token leading widget with avatar and chain badge
+class _TokenLeading extends StatelessWidget {
+  const _TokenLeading({required this.token});
+
+  final TokenResponseModel token;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 48.r,
+      height: 40.r,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          TokenAvatar(imageUrl: token.icon, symbol: token.symbol, size: 40),
+          // Chain badge positioned at bottom-right of avatar
+          if (!token.isSolana)
+            Positioned(
+              right: -4.r,
+              bottom: -4.r,
+              child: ChainBadge(token: token),
+            ),
+        ],
+      ),
+    );
   }
-  return parts.join(' • ');
 }

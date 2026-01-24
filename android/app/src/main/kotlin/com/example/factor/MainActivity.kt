@@ -1,4 +1,4 @@
-package com.example.factor
+package com.factor
 
 import io.flutter.embedding.android.FlutterActivity
 

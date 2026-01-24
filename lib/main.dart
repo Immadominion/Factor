@@ -6,6 +6,7 @@ import 'package:factor/src/view_model.dart';
 import 'package:factor/view/theme/factor_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:provider/provider.dart';
 
 Future<void> main() async {
@@ -19,33 +20,41 @@ class FactorApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MultiProvider(
-      providers: [
-        ChangeNotifierProvider<ThemeController>(
-          create: (_) => ThemeController(),
-        ),
-        ChangeNotifierProvider<ExchangeRateViewModel>(
-          create: (_) {
-            final viewModel = ExchangeRateViewModel();
-            unawaited(viewModel.initialize());
-            return viewModel;
-          },
-        ),
-      ],
-      child: Consumer<ThemeController>(
-        builder: (context, themeController, _) {
-          return MaterialApp(
-            title: 'Factor',
-            builder: BotToastInit(),
-            navigatorObservers: [BotToastNavigatorObserver()],
-            debugShowCheckedModeBanner: false,
-            themeMode: themeController.themeMode,
-            theme: FactorTheme.light(),
-            darkTheme: FactorTheme.dark(),
-            home: const ExchangeRateScreen(),
-          );
-        },
-      ),
+    return ScreenUtilInit(
+      // Design size based on iPhone 14 Pro (393 x 852)
+      designSize: const Size(393, 852),
+      minTextAdapt: true,
+      splitScreenMode: true,
+      builder: (context, child) {
+        return MultiProvider(
+          providers: [
+            ChangeNotifierProvider<ThemeController>(
+              create: (_) => ThemeController(),
+            ),
+            ChangeNotifierProvider<ExchangeRateViewModel>(
+              create: (_) {
+                final viewModel = ExchangeRateViewModel();
+                unawaited(viewModel.initialize());
+                return viewModel;
+              },
+            ),
+          ],
+          child: Consumer<ThemeController>(
+            builder: (context, themeController, _) {
+              return MaterialApp(
+                title: 'Factor',
+                builder: BotToastInit(),
+                navigatorObservers: [BotToastNavigatorObserver()],
+                debugShowCheckedModeBanner: false,
+                themeMode: themeController.themeMode,
+                theme: FactorTheme.light(),
+                darkTheme: FactorTheme.dark(),
+                home: const ExchangeRateScreen(),
+              );
+            },
+          ),
+        );
+      },
     );
   }
 }

@@ -8,8 +8,8 @@ import 'package:factor/utils/app_toast.dart';
 import 'package:factor/view/components/neumorphic_bottom_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:intl/intl.dart';
-import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:provider/provider.dart';
 
 enum ActiveAmountField { token, currency }
@@ -45,6 +45,9 @@ class _ExchangeRateScreenState extends State<ExchangeRateScreen> {
   bool _currencyDigitsMaxed = false;
   FiatCurrency? _lastCurrency;
 
+  DateTime? _lastTokenAmountTapAt;
+  DateTime? _lastCurrencyAmountTapAt;
+
   @override
   Widget build(BuildContext context) {
     final viewModel = context.watch<ExchangeRateViewModel>();
@@ -75,8 +78,9 @@ class _ExchangeRateScreenState extends State<ExchangeRateScreen> {
         actions: [
           IconButton(
             icon: Icon(
-              PhosphorIconsBold.gearSix,
-              color: theme.colorScheme.primary,
+              FactorIcons.gear,
+              color: theme.colorScheme.primary.withAlpha(200),
+              size: 28.r,
             ),
             onPressed: _openSettings,
             tooltip: 'Settings',
@@ -128,10 +132,14 @@ class _ExchangeRateScreenState extends State<ExchangeRateScreen> {
       onCurrencyTap: () => _openCurrencySelector(viewModel),
       isTokenActive: _activeField == ActiveAmountField.token,
       isCurrencyActive: _activeField == ActiveAmountField.currency,
-      onTokenAmountTap: () =>
-          _activateField(ActiveAmountField.token, viewModel),
-      onCurrencyAmountTap: () =>
-          _activateField(ActiveAmountField.currency, viewModel),
+      onTokenAmountTap: () => _handleAmountAreaTap(
+        field: ActiveAmountField.token,
+        viewModel: viewModel,
+      ),
+      onCurrencyAmountTap: () => _handleAmountAreaTap(
+        field: ActiveAmountField.currency,
+        viewModel: viewModel,
+      ),
       lastUpdatedLabel: lastUpdatedLabel,
       ratesUpdatedLabel: viewModel.ratesLastUpdatedLabel,
       onRefresh: viewModel.refreshPrice,
@@ -168,7 +176,7 @@ class _ExchangeRateScreenState extends State<ExchangeRateScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.cloud_off_outlined, size: 48),
+          Icon(FactorIcons.cloudOff, size: FactorIcons.xlSize),
           const SizedBox(height: 16),
           Text(
             'Unable to load live markets right now.',
@@ -375,6 +383,40 @@ class _ExchangeRateScreenState extends State<ExchangeRateScreen> {
     });
   }
 
+  Future<void> _handleAmountAreaTap({
+    required ActiveAmountField field,
+    required ExchangeRateViewModel viewModel,
+  }) async {
+    const doubleTapWindow = Duration(milliseconds: 450);
+    final now = DateTime.now();
+
+    final wasActive = _activeField == field;
+    final lastTap = field == ActiveAmountField.token
+        ? _lastTokenAmountTapAt
+        : _lastCurrencyAmountTapAt;
+    final isQuickSecondTap =
+        wasActive &&
+        lastTap != null &&
+        now.difference(lastTap) <= doubleTapWindow;
+
+    if (field == ActiveAmountField.token) {
+      _lastTokenAmountTapAt = now;
+    } else {
+      _lastCurrencyAmountTapAt = now;
+    }
+
+    if (isQuickSecondTap) {
+      if (field == ActiveAmountField.token) {
+        await _openCoinSelector(viewModel);
+      } else {
+        await _openCurrencySelector(viewModel);
+      }
+      return;
+    }
+
+    _activateField(field, viewModel);
+  }
+
   String _formatEditableNumber(double value) {
     final isLarge = value.abs() >= 1;
     final decimals = isLarge ? 2 : 6;
@@ -476,7 +518,7 @@ class _ExchangeRateScreenState extends State<ExchangeRateScreen> {
   void _handleCurrencyChange(ExchangeRateViewModel viewModel) {
     final currentCurrency = viewModel.selectedCurrency;
     if (currentCurrency == null) return;
-    
+
     // Detect currency change
     if (_lastCurrency != null && _lastCurrency!.code != currentCurrency.code) {
       // Currency changed - ALWAYS keep the token amount and recalculate fiat

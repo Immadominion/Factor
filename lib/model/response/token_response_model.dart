@@ -15,6 +15,9 @@ class TokenResponseModel {
     this.usdPrice,
     this.launchpad,
     this.holderCount,
+    this.chainId,
+    this.marketCap,
+    this.priceChange24h,
   });
 
   final String? id;
@@ -33,6 +36,45 @@ class TokenResponseModel {
   final String? launchpad;
   final int? holderCount;
 
+  /// Chain identifier (e.g., 'solana', 'ethereum', 'bitcoin')
+  /// Defaults to 'solana' for Jupiter-sourced tokens
+  final String? chainId;
+
+  /// Market capitalization in USD
+  final double? marketCap;
+
+  /// 24-hour price change percentage
+  final double? priceChange24h;
+
+  /// Returns the display name of the chain
+  String get chainDisplayName {
+    switch (chainId) {
+      case 'solana':
+        return 'Solana';
+      case 'ethereum':
+        return 'Ethereum';
+      case 'bitcoin':
+        return 'Bitcoin';
+      case 'polygon-pos':
+        return 'Polygon';
+      case 'arbitrum-one':
+        return 'Arbitrum';
+      case 'optimistic-ethereum':
+        return 'Optimism';
+      case 'base':
+        return 'Base';
+      case 'binance-smart-chain':
+        return 'BNB Chain';
+      case 'avalanche':
+        return 'Avalanche';
+      default:
+        return chainId?.toUpperCase() ?? 'Unknown';
+    }
+  }
+
+  /// Whether this token is from Solana (Jupiter source)
+  bool get isSolana => chainId == 'solana' || chainId == null;
+
   TokenResponseModel copyWith({
     String? id,
     String? name,
@@ -49,6 +91,9 @@ class TokenResponseModel {
     double? usdPrice,
     String? launchpad,
     int? holderCount,
+    String? chainId,
+    double? marketCap,
+    double? priceChange24h,
   }) {
     return TokenResponseModel(
       id: id ?? this.id,
@@ -66,6 +111,9 @@ class TokenResponseModel {
       usdPrice: usdPrice ?? this.usdPrice,
       launchpad: launchpad ?? this.launchpad,
       holderCount: holderCount ?? this.holderCount,
+      chainId: chainId ?? this.chainId,
+      marketCap: marketCap ?? this.marketCap,
+      priceChange24h: priceChange24h ?? this.priceChange24h,
     );
   }
 
@@ -86,6 +134,9 @@ class TokenResponseModel {
       'usdPrice': usdPrice,
       'launchpad': launchpad,
       'holderCount': holderCount,
+      'chainId': chainId,
+      'marketCap': marketCap,
+      'priceChange24h': priceChange24h,
     };
   }
 
@@ -106,7 +157,49 @@ class TokenResponseModel {
       usdPrice: (json['usdPrice'] as num?)?.toDouble(),
       launchpad: json['launchpad'] as String?,
       holderCount: (json['holderCount'] as num?)?.toInt(),
+      chainId: json['chainId'] as String?,
+      marketCap: (json['marketCap'] as num?)?.toDouble(),
+      priceChange24h: (json['priceChange24h'] as num?)?.toDouble(),
     );
+  }
+
+  /// Factory for creating from CoinGecko API response
+  factory TokenResponseModel.fromCoinGecko(Map<String, dynamic> json) {
+    return TokenResponseModel(
+      id: json['id'] as String?,
+      name: json['name'] as String?,
+      symbol: (json['symbol'] as String?)?.toUpperCase(),
+      icon:
+          json['image'] as String? ??
+          json['large'] as String? ??
+          json['thumb'] as String?,
+      usdPrice: (json['current_price'] as num?)?.toDouble(),
+      marketCap: (json['market_cap'] as num?)?.toDouble(),
+      priceChange24h: (json['price_change_percentage_24h'] as num?)?.toDouble(),
+      // CoinGecko doesn't specify chain in search results, we infer from platforms
+      chainId: _inferChainFromPlatforms(json['platforms']),
+    );
+  }
+
+  static String? _inferChainFromPlatforms(dynamic platforms) {
+    if (platforms == null || platforms is! Map) return null;
+    final platformMap = Map<String, dynamic>.from(platforms);
+    // Priority order for chain detection
+    const priorityOrder = [
+      'ethereum',
+      'solana',
+      'polygon-pos',
+      'arbitrum-one',
+      'optimistic-ethereum',
+      'base',
+      'binance-smart-chain',
+      'avalanche',
+    ];
+    for (final chain in priorityOrder) {
+      if (platformMap.containsKey(chain)) return chain;
+    }
+    // Return first available chain if none match priority
+    return platformMap.keys.isNotEmpty ? platformMap.keys.first : null;
   }
 
   bool matchesQuery(String query) {

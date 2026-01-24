@@ -98,6 +98,6 @@ class FactorTheme {
           bodySmall: base.bodySmall?.copyWith(color: color),
           labelLarge: base.labelLarge?.copyWith(color: color),
         )
-        .apply(fontFamily: FactorStrings.inter);
+        .apply(fontFamily: FactorStrings.bungee);
   }
 }

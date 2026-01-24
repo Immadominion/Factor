@@ -7,15 +7,28 @@ import 'package:factor/model/response/token_response_model.dart';
 import 'package:factor/src/repository.dart';
 import 'package:flutter/material.dart';
 
+/// Filter for token chain selection
+enum ChainFilter {
+  all('All Chains'),
+  solana('Solana'),
+  otherChains('Other Chains');
+
+  const ChainFilter(this.label);
+  final String label;
+}
+
 class ExchangeRateViewModel extends ChangeNotifier {
   ExchangeRateViewModel({
     FactorsBackend? factorsBackend,
     CurrencyBackend? currencyBackend,
+    CoinGeckoBackend? coinGeckoBackend,
   }) : _factorsBackend = factorsBackend ?? FactorsBackend(),
-       _currencyBackend = currencyBackend ?? CurrencyBackend();
+       _currencyBackend = currencyBackend ?? CurrencyBackend(),
+       _coinGeckoBackend = coinGeckoBackend ?? CoinGeckoBackend();
 
   final FactorsBackend _factorsBackend;
   final CurrencyBackend _currencyBackend;
+  final CoinGeckoBackend _coinGeckoBackend;
 
   bool _initialized = false;
   bool _loadingTokens = false;
@@ -26,6 +39,7 @@ class ExchangeRateViewModel extends ChangeNotifier {
   List<TokenResponseModel> _tokens = [];
   List<TokenResponseModel> _filteredTokens = [];
   TokenResponseModel? _selectedToken;
+  ChainFilter _chainFilter = ChainFilter.all;
 
   List<FiatCurrency> _currencies = [];
   List<FiatCurrency> _filteredCurrencies = [];
@@ -45,11 +59,17 @@ class ExchangeRateViewModel extends ChangeNotifier {
   bool get currenciesLoading => _loadingCurrencies;
   bool get priceLoading => _loadingPrice;
   bool get tokenSearchLoading => _searchingTokens;
+  ChainFilter get chainFilter => _chainFilter;
   bool get isBusy => _loadingTokens || _loadingCurrencies || _loadingPrice;
   String? get errorMessage => _errorMessage;
   String? get ratesLastUpdatedLabel => _ratesLastUpdatedLabel;
 
-  List<TokenResponseModel> get tokens => List.unmodifiable(_filteredTokens);
+  /// Returns filtered tokens with chain filter applied
+  List<TokenResponseModel> get tokens {
+    final filtered = _applyChainFilter(_filteredTokens);
+    return List.unmodifiable(filtered);
+  }
+
   List<FiatCurrency> get currencies => List.unmodifiable(_filteredCurrencies);
 
   TokenResponseModel? get selectedToken => _selectedToken;
@@ -61,6 +81,25 @@ class ExchangeRateViewModel extends ChangeNotifier {
   double get convertedPricePerToken {
     final rate = _selectedCurrency?.rateToUsd ?? 1;
     return usdPricePerToken * rate;
+  }
+
+  /// Sets the chain filter and notifies listeners
+  void setChainFilter(ChainFilter filter) {
+    if (_chainFilter == filter) return;
+    _chainFilter = filter;
+    notifyListeners();
+  }
+
+  /// Applies the chain filter to a list of tokens
+  List<TokenResponseModel> _applyChainFilter(List<TokenResponseModel> tokens) {
+    switch (_chainFilter) {
+      case ChainFilter.all:
+        return tokens;
+      case ChainFilter.solana:
+        return tokens.where((t) => t.isSolana).toList();
+      case ChainFilter.otherChains:
+        return tokens.where((t) => !t.isSolana).toList();
+    }
   }
 
   Future<void> initialize() async {
@@ -86,14 +125,20 @@ class ExchangeRateViewModel extends ChangeNotifier {
   }
 
   Future<void> refreshPrice() async {
-    final tokenId = _selectedToken?.id;
-    if (tokenId == null || tokenId.isEmpty) {
+    final token = _selectedToken;
+    final tokenId = token?.id;
+    if (tokenId == null || tokenId.isEmpty || token == null) {
       return;
     }
     _loadingPrice = true;
     notifyListeners();
     try {
-      _tokenPrice = await _factorsBackend.getPriceBackend(tokenId);
+      // Use appropriate backend based on chain
+      if (token.isSolana) {
+        _tokenPrice = await _factorsBackend.getPriceBackend(tokenId);
+      } else {
+        _tokenPrice = await _coinGeckoBackend.getPrice(tokenId);
+      }
       _priceFetchedAt = DateTime.now();
       _errorMessage = null;
     } catch (error) {
@@ -125,7 +170,7 @@ class ExchangeRateViewModel extends ChangeNotifier {
     final localMatches = _tokens
         .where((token) => token.matchesQuery(trimmed))
         .toList();
-    _filteredTokens = localMatches;
+    _filteredTokens = _sortByRelevance(localMatches, trimmed);
 
     final shouldHitRemote =
         trimmed.length >= 2 && trimmed != _lastRemoteTokenQuery;
@@ -136,7 +181,7 @@ class ExchangeRateViewModel extends ChangeNotifier {
       return;
     }
 
-    final fallback = List<TokenResponseModel>.from(localMatches);
+    final fallback = List<TokenResponseModel>.from(_filteredTokens);
     _tokenSearchDebounce = Timer(const Duration(milliseconds: 320), () {
       _performRemoteTokenSearch(trimmed, fallback);
     });
@@ -161,6 +206,9 @@ class ExchangeRateViewModel extends ChangeNotifier {
 
   /// Attempts to select a token. Returns `true` if successful, `false` if price
   /// data is unavailable for this token.
+  ///
+  /// For Solana tokens: Uses Jupiter API for pricing
+  /// For other chains: Uses CoinGecko API for pricing
   Future<bool> selectToken(TokenResponseModel token) async {
     final tokenId = token.id;
     if (tokenId == null || tokenId.isEmpty) {
@@ -172,10 +220,23 @@ class ExchangeRateViewModel extends ChangeNotifier {
     // First check if price data is available for this token
     _loadingPrice = true;
     notifyListeners();
-    
+
     try {
-      final tokenPrice = await _factorsBackend.getPriceBackend(tokenId);
-      
+      TokenPrice? tokenPrice;
+
+      // Use appropriate backend based on chain
+      if (token.isSolana) {
+        // Solana tokens: Use Jupiter (primary source)
+        tokenPrice = await _factorsBackend.getPriceBackend(tokenId);
+      } else {
+        // Other chains: Use CoinGecko
+        tokenPrice = await _coinGeckoBackend.getPrice(tokenId);
+      }
+
+      if (tokenPrice == null) {
+        throw Exception('Price data unavailable');
+      }
+
       // Price data is available, proceed with selection
       _selectedToken = token;
       _tokenPrice = tokenPrice;
@@ -190,8 +251,9 @@ class ExchangeRateViewModel extends ChangeNotifier {
       return true;
     } catch (error) {
       // Price data not available - don't change the selected token
-      _errorMessage = 'Price unavailable for ${token.symbol ?? 'this token'} - '
-          'it may have insufficient liquidity or not be tradable on Jupiter';
+      _errorMessage =
+          'Price unavailable for ${token.symbol ?? 'this token'} - '
+          'it may have insufficient liquidity or not be tradable';
       _loadingPrice = false;
       notifyListeners();
       return false;
@@ -325,12 +387,30 @@ class ExchangeRateViewModel extends ChangeNotifier {
     List<TokenResponseModel> fallback,
   ) async {
     try {
-      final remoteResults = await _factorsBackend.searchTokens(query);
+      // Search Jupiter (Solana) first - this is the PRIMARY source
+      final jupiterResults = await _factorsBackend.searchTokens(query);
+
+      // Also search CoinGecko for multi-chain results (secondary source)
+      // This runs in parallel for better performance
+      List<TokenResponseModel> coinGeckoResults = [];
+      try {
+        coinGeckoResults = await _coinGeckoBackend.search(query);
+      } catch (_) {
+        // CoinGecko errors should not break the search
+        // Jupiter results are sufficient
+      }
+
       if (_tokenQuery != query) return;
 
-      if (remoteResults.isNotEmpty) {
-        _tokens = _mergeTokenCatalogues(_tokens, remoteResults);
-        _filteredTokens = remoteResults;
+      if (jupiterResults.isNotEmpty || coinGeckoResults.isNotEmpty) {
+        // Merge results: Jupiter (Solana) tokens take priority
+        final mergedResults = _mergeMultiChainResults(
+          jupiterResults,
+          coinGeckoResults,
+        );
+
+        _tokens = _mergeTokenCatalogues(_tokens, mergedResults);
+        _filteredTokens = _sortByRelevance(mergedResults, query);
         _lastRemoteTokenQuery = query;
         _errorMessage = null;
       } else {
@@ -347,6 +427,88 @@ class ExchangeRateViewModel extends ChangeNotifier {
         notifyListeners();
       }
     }
+  }
+
+  /// Merges Jupiter (Solana) and CoinGecko results.
+  /// Jupiter results take priority for Solana tokens.
+  List<TokenResponseModel> _mergeMultiChainResults(
+    List<TokenResponseModel> jupiterResults,
+    List<TokenResponseModel> coinGeckoResults,
+  ) {
+    final merged = <TokenResponseModel>[];
+    final seenIds = <String>{};
+
+    // Add ALL CoinGecko results first (they have market cap ranking)
+    // This ensures major tokens like ETH, BNB appear prominently
+    for (final token in coinGeckoResults) {
+      final id = token.id;
+      if (id != null && !seenIds.contains(id)) {
+        seenIds.add(id);
+        merged.add(token);
+      }
+    }
+
+    // Add Jupiter (Solana) results
+    // These are unique Solana tokens that may not be on CoinGecko
+    for (final token in jupiterResults) {
+      final id = token.id;
+      if (id != null && !seenIds.contains(id)) {
+        seenIds.add(id);
+        merged.add(token);
+      }
+    }
+
+    return merged;
+  }
+
+  /// Sorts tokens by relevance to the search query.
+  /// Priority order:
+  /// 1. Exact symbol match (case-insensitive), then by market cap
+  /// 2. Symbol starts with query, then by market cap
+  /// 3. Exact name match, then by market cap
+  /// 4. Name starts with query, then by market cap
+  /// 5. Contains query in symbol or name, then by market cap
+  List<TokenResponseModel> _sortByRelevance(
+    List<TokenResponseModel> tokens,
+    String query,
+  ) {
+    final lowerQuery = query.toLowerCase();
+
+    int relevanceScore(TokenResponseModel token) {
+      final symbol = (token.symbol ?? '').toLowerCase();
+      final name = (token.name ?? '').toLowerCase();
+
+      // Exact symbol match - highest priority
+      if (symbol == lowerQuery) return 0;
+      // Symbol starts with query
+      if (symbol.startsWith(lowerQuery)) return 1;
+      // Exact name match
+      if (name == lowerQuery) return 2;
+      // Name starts with query
+      if (name.startsWith(lowerQuery)) return 3;
+      // Symbol contains query
+      if (symbol.contains(lowerQuery)) return 4;
+      // Name contains query
+      if (name.contains(lowerQuery)) return 5;
+      // Fallback
+      return 6;
+    }
+
+    final sorted = List<TokenResponseModel>.from(tokens);
+    sorted.sort((a, b) {
+      final scoreA = relevanceScore(a);
+      final scoreB = relevanceScore(b);
+      if (scoreA != scoreB) return scoreA.compareTo(scoreB);
+
+      // Secondary sort: by market cap (higher is better)
+      final marketCapA = a.marketCap ?? 0;
+      final marketCapB = b.marketCap ?? 0;
+      if (marketCapA != marketCapB) return marketCapB.compareTo(marketCapA);
+
+      // Tertiary sort: alphabetically by symbol
+      return compareAsciiLowerCaseNatural(a.symbol ?? '', b.symbol ?? '');
+    });
+    return sorted;
   }
 
   List<TokenResponseModel> _mergeTokenCatalogues(

@@ -1,6 +1,7 @@
 class FactorStrings {
   static const factor = 'Factor';
   static const inter = 'Inter';
+  static const bungee = 'Bungee';
   //Headings
   static const hdrSelectCurrency = 'Select currency';
   static const hdrSelectCoin = 'Select coin';
@@ -21,5 +22,6 @@ class FactorStrings {
       'Error occured while communicating with the server.';
   static const msgUnhandledStatusCode = 'Unhandled status code';
   static const errRateLimit = 'Too many requests. Please try again shortly.';
-  static const errPriceUnavailable = 'Price unavailable - token may have insufficient liquidity';
+  static const errPriceUnavailable =
+      'Price unavailable - token may have insufficient liquidity';
 }

@@ -43,3 +43,24 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Node / web outputs
+node_modules/
+.vercel/
+website/.next/
+website/node_modules/
+website/.vercel/
+website/out/
+docs/node_modules/
+publishing/node_modules/
+publishing/files/**
+publishing/media/**
+
+# iOS / macOS build artifacts
+ios/Pods/
+ios/.symlinks/
+**/DerivedData/
+
+# Flutter build outputs
+build/
+web/
