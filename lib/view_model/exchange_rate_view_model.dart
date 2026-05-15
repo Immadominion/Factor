@@ -22,13 +22,16 @@ class ExchangeRateViewModel extends ChangeNotifier {
     FactorsBackend? factorsBackend,
     CurrencyBackend? currencyBackend,
     CoinGeckoBackend? coinGeckoBackend,
+    PreferencesService? preferencesService,
   }) : _factorsBackend = factorsBackend ?? FactorsBackend(),
        _currencyBackend = currencyBackend ?? CurrencyBackend(),
-       _coinGeckoBackend = coinGeckoBackend ?? CoinGeckoBackend();
+       _coinGeckoBackend = coinGeckoBackend ?? CoinGeckoBackend(),
+       _preferences = preferencesService ?? PreferencesService();
 
   final FactorsBackend _factorsBackend;
   final CurrencyBackend _currencyBackend;
   final CoinGeckoBackend _coinGeckoBackend;
+  final PreferencesService _preferences;
 
   bool _initialized = false;
   bool _loadingTokens = false;
@@ -53,6 +56,28 @@ class ExchangeRateViewModel extends ChangeNotifier {
   String? _ratesLastUpdatedLabel;
   Timer? _tokenSearchDebounce;
   String _lastRemoteTokenQuery = '';
+
+  // Persistence-backed state ------------------------------------------------
+  List<String> _recentTokenIds = const <String>[];
+  List<String> _recentCurrencyCodes = const <String>[];
+  Set<String> _favoriteTokenIds = const <String>{};
+  Set<String> _favoriteCurrencyCodes = const <String>{};
+  bool _restoreLastPair = true;
+  bool _prioritizeRecents = true;
+
+  List<String> get recentTokenIds => List.unmodifiable(_recentTokenIds);
+  List<String> get recentCurrencyCodes =>
+      List.unmodifiable(_recentCurrencyCodes);
+  Set<String> get favoriteTokenIds => Set.unmodifiable(_favoriteTokenIds);
+  Set<String> get favoriteCurrencyCodes =>
+      Set.unmodifiable(_favoriteCurrencyCodes);
+  bool get restoreLastPairEnabled => _restoreLastPair;
+  bool get prioritizeRecentsEnabled => _prioritizeRecents;
+
+  bool isTokenFavorite(String? id) =>
+      id != null && _favoriteTokenIds.contains(id);
+  bool isCurrencyFavorite(String? code) =>
+      code != null && _favoriteCurrencyCodes.contains(code);
 
   bool get isInitialized => _initialized;
   bool get tokensLoading => _loadingTokens;
@@ -106,17 +131,41 @@ class ExchangeRateViewModel extends ChangeNotifier {
     if (_initialized) return;
     _initialized = true;
     try {
+      // Load persisted user preferences first so we can honour them when
+      // wiring up defaults.
+      _restoreLastPair = await _preferences.getRestoreLastPair();
+      _prioritizeRecents = await _preferences.getPrioritizeRecents();
+      _recentTokenIds = await _preferences.getRecentTokenIds();
+      _recentCurrencyCodes = await _preferences.getRecentCurrencyCodes();
+      _favoriteTokenIds = await _preferences.getFavoriteTokenIds();
+      _favoriteCurrencyCodes = await _preferences.getFavoriteCurrencyCodes();
+
       await Future.wait([_loadCurrencies(), _loadTokens()]);
+
+      final lastCurrencyCode = _restoreLastPair
+          ? await _preferences.getLastCurrencyCode()
+          : null;
       _selectedCurrency ??= _currencies.firstWhere(
-        (currency) => currency.code == 'USD',
-        orElse: () => _currencies.first,
+        (currency) => currency.code == (lastCurrencyCode ?? 'USD'),
+        orElse: () => _currencies.firstWhere(
+          (currency) => currency.code == 'USD',
+          orElse: () => _currencies.first,
+        ),
       );
-      _filteredCurrencies = List.of(_currencies);
+
+      final lastTokenId = _restoreLastPair
+          ? await _preferences.getLastTokenId()
+          : null;
       _selectedToken ??= _tokens.firstWhere(
-        (token) => (token.symbol ?? '').toUpperCase() == 'SOL',
-        orElse: () => _tokens.first,
+        (token) => token.id != null && token.id == lastTokenId,
+        orElse: () => _tokens.firstWhere(
+          (token) => (token.symbol ?? '').toUpperCase() == 'SOL',
+          orElse: () => _tokens.first,
+        ),
       );
-      _filteredTokens = List.of(_tokens);
+
+      _filteredTokens = _orderForBrowse(_tokens);
+      _filteredCurrencies = _orderCurrenciesForBrowse(_currencies);
       await refreshPrice();
     } catch (error) {
       _errorMessage = error.toString();
@@ -161,7 +210,7 @@ class ExchangeRateViewModel extends ChangeNotifier {
 
     if (trimmed.isEmpty) {
       _searchingTokens = false;
-      _filteredTokens = List.of(_tokens);
+      _filteredTokens = _orderForBrowse(_tokens);
       _lastRemoteTokenQuery = '';
       notifyListeners();
       return;
@@ -190,7 +239,7 @@ class ExchangeRateViewModel extends ChangeNotifier {
   void searchCurrencies(String query) {
     _currencyQuery = query;
     if (query.isEmpty) {
-      _filteredCurrencies = List.of(_currencies);
+      _filteredCurrencies = _orderCurrenciesForBrowse(_currencies);
     } else {
       final lower = query.toLowerCase();
       _filteredCurrencies = _currencies
@@ -242,12 +291,23 @@ class ExchangeRateViewModel extends ChangeNotifier {
       _tokenPrice = tokenPrice;
       _priceFetchedAt = DateTime.now();
       _tokenQuery = '';
-      _filteredTokens = List.of(_tokens);
+      _filteredTokens = _orderForBrowse(_tokens);
       _tokenSearchDebounce?.cancel();
       _searchingTokens = false;
       _errorMessage = null;
       _loadingPrice = false;
       notifyListeners();
+
+      // Persist after we know the selection succeeded.
+      final id = token.id;
+      if (id != null && id.isNotEmpty) {
+        unawaited(_preferences.setLastTokenId(id));
+        unawaited(
+          _preferences
+              .pushRecentTokenId(id)
+              .then((updated) => _recentTokenIds = updated),
+        );
+      }
       return true;
     } catch (error) {
       // Price data not available - don't change the selected token
@@ -263,8 +323,15 @@ class ExchangeRateViewModel extends ChangeNotifier {
   void selectCurrency(FiatCurrency currency) {
     _selectedCurrency = currency;
     _currencyQuery = '';
-    _filteredCurrencies = List.of(_currencies);
+    _filteredCurrencies = _orderCurrenciesForBrowse(_currencies);
     notifyListeners();
+
+    unawaited(_preferences.setLastCurrencyCode(currency.code));
+    unawaited(
+      _preferences
+          .pushRecentCurrencyCode(currency.code)
+          .then((updated) => _recentCurrencyCodes = updated),
+    );
   }
 
   double convertTokenAmount(String tokenAmountDigits) {
@@ -277,6 +344,119 @@ class ExchangeRateViewModel extends ChangeNotifier {
   void clearError() {
     _errorMessage = null;
     notifyListeners();
+  }
+
+  // -------------------- Favorites + recents -------------------------------
+
+  Future<void> toggleFavoriteToken(String? id) async {
+    if (id == null || id.isEmpty) return;
+    _favoriteTokenIds = await _preferences.toggleFavoriteToken(id);
+    if (_tokenQuery.isEmpty) {
+      _filteredTokens = _orderForBrowse(_tokens);
+    }
+    notifyListeners();
+  }
+
+  Future<void> toggleFavoriteCurrency(String? code) async {
+    if (code == null || code.isEmpty) return;
+    _favoriteCurrencyCodes = await _preferences.toggleFavoriteCurrency(code);
+    if (_currencyQuery.isEmpty) {
+      _filteredCurrencies = _orderCurrenciesForBrowse(_currencies);
+    }
+    notifyListeners();
+  }
+
+  Future<void> setRestoreLastPair(bool value) async {
+    if (_restoreLastPair == value) return;
+    _restoreLastPair = value;
+    await _preferences.setRestoreLastPair(value);
+    notifyListeners();
+  }
+
+  Future<void> setPrioritizeRecents(bool value) async {
+    if (_prioritizeRecents == value) return;
+    _prioritizeRecents = value;
+    await _preferences.setPrioritizeRecents(value);
+    if (_tokenQuery.isEmpty) {
+      _filteredTokens = _orderForBrowse(_tokens);
+    }
+    if (_currencyQuery.isEmpty) {
+      _filteredCurrencies = _orderCurrenciesForBrowse(_currencies);
+    }
+    notifyListeners();
+  }
+
+  Future<void> clearRecentsAndFavorites() async {
+    await _preferences.clearRecents();
+    await _preferences.clearFavorites();
+    _recentTokenIds = const <String>[];
+    _recentCurrencyCodes = const <String>[];
+    _favoriteTokenIds = const <String>{};
+    _favoriteCurrencyCodes = const <String>{};
+    if (_tokenQuery.isEmpty) {
+      _filteredTokens = _orderForBrowse(_tokens);
+    }
+    if (_currencyQuery.isEmpty) {
+      _filteredCurrencies = _orderCurrenciesForBrowse(_currencies);
+    }
+    notifyListeners();
+  }
+
+  /// Browse-mode ordering: favorites first, then recents (in order of recency),
+  /// then everything else with their original ordering preserved.
+  List<TokenResponseModel> _orderForBrowse(List<TokenResponseModel> source) {
+    if (!_prioritizeRecents && _favoriteTokenIds.isEmpty) {
+      return List.of(source);
+    }
+    final byId = <String, TokenResponseModel>{};
+    for (final token in source) {
+      final id = token.id;
+      if (id != null) byId[id] = token;
+    }
+    final ordered = <TokenResponseModel>[];
+    final used = <String>{};
+
+    for (final id in _favoriteTokenIds) {
+      final token = byId[id];
+      if (token != null && used.add(id)) ordered.add(token);
+    }
+    if (_prioritizeRecents) {
+      for (final id in _recentTokenIds) {
+        if (used.contains(id)) continue;
+        final token = byId[id];
+        if (token != null && used.add(id)) ordered.add(token);
+      }
+    }
+    for (final token in source) {
+      final id = token.id;
+      if (id == null || !used.contains(id)) ordered.add(token);
+    }
+    return ordered;
+  }
+
+  List<FiatCurrency> _orderCurrenciesForBrowse(List<FiatCurrency> source) {
+    if (!_prioritizeRecents && _favoriteCurrencyCodes.isEmpty) {
+      return List.of(source);
+    }
+    final byCode = {for (final c in source) c.code: c};
+    final ordered = <FiatCurrency>[];
+    final used = <String>{};
+
+    for (final code in _favoriteCurrencyCodes) {
+      final currency = byCode[code];
+      if (currency != null && used.add(code)) ordered.add(currency);
+    }
+    if (_prioritizeRecents) {
+      for (final code in _recentCurrencyCodes) {
+        if (used.contains(code)) continue;
+        final currency = byCode[code];
+        if (currency != null && used.add(code)) ordered.add(currency);
+      }
+    }
+    for (final currency in source) {
+      if (!used.contains(currency.code)) ordered.add(currency);
+    }
+    return ordered;
   }
 
   @override
@@ -326,7 +506,7 @@ class ExchangeRateViewModel extends ChangeNotifier {
       final catalogue = await _factorsBackend.fetchTokenCatalogue();
       _tokens = catalogue;
       _filteredTokens = _tokenQuery.isEmpty
-          ? List.of(_tokens)
+          ? _orderForBrowse(_tokens)
           : _tokens.where((token) => token.matchesQuery(_tokenQuery)).toList();
       _errorMessage = null;
     } catch (error) {

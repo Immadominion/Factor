@@ -7,6 +7,7 @@ import 'package:factor/view/components/neumorphic_selector.dart';
 import 'package:factor/view/components/token_avatar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:provider/provider.dart';
 
 class SelectCoinScreen extends StatefulWidget {
@@ -108,20 +109,34 @@ class _SelectCoinScreenState extends State<SelectCoinScreen> {
                     itemCount: tokens.length,
                     itemBuilder: (context, index) {
                       final token = tokens[index];
+                      final isSelected = token.id == viewModel.selectedToken?.id;
+                      final isFavorite = viewModel.isTokenFavorite(token.id);
                       return Padding(
                         padding: const EdgeInsets.only(right: 4, left: 4),
                         child: NeumorphicSelectorTile(
                           title: token.symbol?.toUpperCase() ?? '--',
                           subtitle: token.name,
                           leading: _TokenLeading(token: token),
-                          isSelected: token.id == viewModel.selectedToken?.id,
-                          trailing: token.id == viewModel.selectedToken?.id
-                              ? Icon(
+                          isSelected: isSelected,
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _FavoriteStar(
+                                isFavorite: isFavorite,
+                                onTap: () => viewModel.toggleFavoriteToken(
+                                  token.id,
+                                ),
+                              ),
+                              if (isSelected) ...[
+                                SizedBox(width: 8.r),
+                                Icon(
                                   FactorIcons.checkCircle,
                                   color: Theme.of(context).colorScheme.primary,
                                   size: FactorIcons.defaultSize,
-                                )
-                              : null,
+                                ),
+                              ],
+                            ],
+                          ),
                           onTap: () async {
                             if (_isSelecting) return;
                             _isSelecting = true;
@@ -221,6 +236,34 @@ class _TokenLeading extends StatelessWidget {
               child: ChainBadge(token: token),
             ),
         ],
+      ),
+    );
+  }
+}
+
+/// Tappable star that toggles favorite state for a token or currency tile.
+class _FavoriteStar extends StatelessWidget {
+  const _FavoriteStar({required this.isFavorite, required this.onTap});
+
+  final bool isFavorite;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = isFavorite
+        ? theme.colorScheme.primary
+        : theme.iconTheme.color?.withValues(alpha: 0.45);
+    return InkResponse(
+      onTap: onTap,
+      radius: 18.r,
+      child: Padding(
+        padding: EdgeInsets.all(6.r),
+        child: Icon(
+          isFavorite ? PhosphorIconsFill.star : PhosphorIconsRegular.star,
+          size: FactorIcons.smallSize,
+          color: color,
+        ),
       ),
     );
   }

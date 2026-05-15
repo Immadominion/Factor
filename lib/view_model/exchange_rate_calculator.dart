@@ -1,3 +1,5 @@
+import 'package:factor/repository/services/preferences_service.dart';
+
 class ExchangeRateCalculator {
   ExchangeRateCalculator._();
   static final ExchangeRateCalculator _instance = ExchangeRateCalculator._();
@@ -40,8 +42,31 @@ class ExchangeRateCalculator {
   bool _isSelectCurrencyScreenInteractionDisabled = false;
   bool get isSelectCurrencyScreenInteractionDisabled =>
       _isSelectCurrencyScreenInteractionDisabled;
-  bool hapticsEnabled = true;
-  bool audioClickEnabled = true;
+  bool _hapticsEnabled = true;
+  bool _audioClickEnabled = true;
+
+  bool get hapticsEnabled => _hapticsEnabled;
+  bool get audioClickEnabled => _audioClickEnabled;
+
+  PreferencesService? _preferences;
+
+  /// Wires the singleton up to a [PreferencesService] and hydrates the
+  /// persisted feedback toggles. Safe to call multiple times.
+  Future<void> bindPreferences(PreferencesService preferences) async {
+    _preferences = preferences;
+    _hapticsEnabled = await preferences.getHapticsEnabled();
+    _audioClickEnabled = await preferences.getAudioClickEnabled();
+  }
+
+  Future<void> setHapticsEnabled(bool value) async {
+    _hapticsEnabled = value;
+    await _preferences?.setHapticsEnabled(value);
+  }
+
+  Future<void> setAudioClickEnabled(bool value) async {
+    _audioClickEnabled = value;
+    await _preferences?.setAudioClickEnabled(value);
+  }
 
   ///Method handles keypad tap actions.
   /// - If the key is `'clear'`, resets [_coinAmountDigits] to `'0'`.

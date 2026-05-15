@@ -72,6 +72,9 @@ class FactorIcons {
   static const chartLine = PhosphorIconsBold.chartLine;
   static const globe = PhosphorIconsBold.globe;
   static const link = PhosphorIconsBold.link;
+  static const star = PhosphorIconsBold.star;
+  static const starFilled = PhosphorIconsFill.star;
+  static const trash = PhosphorIconsBold.trash;
 }
 
 /// Helper widget to display a Phosphor icon with consistent styling and sizing.

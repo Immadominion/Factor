@@ -9,6 +9,7 @@ export 'package:factor/repository/network/coingecko_api_constants.dart';
 
 //<------------------------------- Services begins here ----------------------------------->
 export 'package:factor/repository/services/api/api_services.dart';
+export 'package:factor/repository/services/preferences_service.dart';
 //<------------------------------- Services ends here ----------------------------------->
 
 //<------------------------------- Backend begins here ----------------------------------->

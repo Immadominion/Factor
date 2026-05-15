@@ -2,9 +2,8 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:factor/src/config.dart';
+import 'package:factor/src/view_model.dart';
 import 'package:factor/view/components/neumorphic_card.dart';
-import 'package:factor/view_model/exchange_rate_calculator.dart';
-import 'package:factor/view_model/theme_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -150,10 +149,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 'Vibrate softly when you press keypad buttons.',
                               ),
                               value: _hapticsEnabled,
-                              onChanged: (value) {
+                              onChanged: (value) async {
+                                await _calculator.setHapticsEnabled(value);
+                                if (!mounted) return;
                                 setState(() {
                                   _hapticsEnabled = value;
-                                  _calculator.hapticsEnabled = value;
                                 });
                               },
                             ),
@@ -172,16 +172,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 'Play a gentle click on each keypad tap.',
                               ),
                               value: _soundEnabled,
-                              onChanged: (value) {
+                              onChanged: (value) async {
+                                await _calculator.setAudioClickEnabled(value);
+                                if (!mounted) return;
                                 setState(() {
                                   _soundEnabled = value;
-                                  _calculator.audioClickEnabled = value;
                                 });
                               },
                             ),
                           ],
                         ),
                       ),
+                      const SizedBox(height: 24),
+                      const _SectionHeading(label: 'Defaults & history'),
+                      const SizedBox(height: 12),
+                      _DefaultsAndHistoryCard(),
                       const SizedBox(height: 24),
                       const _SectionHeading(label: 'Stay in touch'),
                       const SizedBox(height: 12),
@@ -594,5 +599,100 @@ class _BottomLink extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// Card with toggles that control which session state Factor restores between
+/// launches and a destructive action to clear recents/favorites.
+class _DefaultsAndHistoryCard extends StatelessWidget {
+  const _DefaultsAndHistoryCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final viewModel = context.watch<ExchangeRateViewModel>();
+    return NeumorphicCard(
+      borderRadius: 24,
+      padding: EdgeInsets.zero,
+      child: Column(
+        children: [
+          SwitchListTile.adaptive(
+            secondary: Icon(
+              FactorIcons.refresh,
+              color: theme.colorScheme.primary,
+              size: FactorIcons.defaultSize,
+            ),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+            title: const Text('Restore last pair'),
+            subtitle: const Text(
+              'Reopen the last token and currency you used.',
+            ),
+            value: viewModel.restoreLastPairEnabled,
+            onChanged: viewModel.setRestoreLastPair,
+          ),
+          const Divider(height: 1),
+          SwitchListTile.adaptive(
+            secondary: Icon(
+              FactorIcons.star,
+              color: theme.colorScheme.primary,
+              size: FactorIcons.defaultSize,
+            ),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+            title: const Text('Prioritize recents & favorites'),
+            subtitle: const Text(
+              'Show favorites and recent picks at the top of the lists.',
+            ),
+            value: viewModel.prioritizeRecentsEnabled,
+            onChanged: viewModel.setPrioritizeRecents,
+          ),
+          const Divider(height: 1),
+          ListTile(
+            leading: Icon(
+              FactorIcons.trash,
+              color: theme.colorScheme.error,
+              size: FactorIcons.defaultSize,
+            ),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+            title: Text(
+              'Clear recents & favorites',
+              style: theme.textTheme.bodyLarge?.copyWith(
+                color: theme.colorScheme.error,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            onTap: () => _confirmClear(context, viewModel),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _confirmClear(
+    BuildContext context,
+    ExchangeRateViewModel viewModel,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Clear recents & favorites?'),
+        content: const Text(
+          'This removes your saved favorite tokens, currencies, '
+          'and recently used items. This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Clear'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await viewModel.clearRecentsAndFavorites();
+    }
   }
 }

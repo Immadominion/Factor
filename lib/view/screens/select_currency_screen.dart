@@ -4,6 +4,8 @@ import 'package:factor/src/view_model.dart';
 import 'package:factor/view/components/neumorphic_bottom_sheet.dart';
 import 'package:factor/view/components/neumorphic_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:provider/provider.dart';
 
 class SelectCurrencyScreen extends StatefulWidget {
@@ -86,6 +88,11 @@ class _SelectCurrencyScreenState extends State<SelectCurrencyScreen> {
                         final FiatCurrency currency = currencies[index];
                         final subtitle =
                             '1 USD = ${currency.rateToUsd.toStringAsFixed(4)} ${currency.code}';
+                        final isSelected =
+                            currency.code == viewModel.selectedCurrency?.code;
+                        final isFavorite = viewModel.isCurrencyFavorite(
+                          currency.code,
+                        );
                         return Padding(
                           padding: const EdgeInsets.only(right: 4, left: 4),
                           child: NeumorphicSelectorTile(
@@ -95,20 +102,27 @@ class _SelectCurrencyScreenState extends State<SelectCurrencyScreen> {
                               symbol: currency.symbol,
                               code: currency.code,
                             ),
-                            isSelected:
-                                currency.code ==
-                                viewModel.selectedCurrency?.code,
-                            trailing:
-                                currency.code ==
-                                    viewModel.selectedCurrency?.code
-                                ? Icon(
+                            isSelected: isSelected,
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _FavoriteStar(
+                                  isFavorite: isFavorite,
+                                  onTap: () => viewModel
+                                      .toggleFavoriteCurrency(currency.code),
+                                ),
+                                if (isSelected) ...[
+                                  SizedBox(width: 8.r),
+                                  Icon(
                                     FactorIcons.checkCircle,
                                     color: Theme.of(
                                       context,
                                     ).colorScheme.primary,
                                     size: FactorIcons.defaultSize,
-                                  )
-                                : null,
+                                  ),
+                                ],
+                              ],
+                            ),
                             onTap: () {
                               if (_isSelecting) return;
                               _isSelecting = true;
@@ -149,6 +163,34 @@ class _CurrencyLeading extends StatelessWidget {
       backgroundColor: theme.colorScheme.secondary.withValues(alpha: 0.1),
       foregroundColor: theme.colorScheme.secondary,
       child: Text(display),
+    );
+  }
+}
+
+/// Tappable star that toggles favorite state for a currency tile.
+class _FavoriteStar extends StatelessWidget {
+  const _FavoriteStar({required this.isFavorite, required this.onTap});
+
+  final bool isFavorite;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = isFavorite
+        ? theme.colorScheme.primary
+        : theme.iconTheme.color?.withValues(alpha: 0.45);
+    return InkResponse(
+      onTap: onTap,
+      radius: 18.r,
+      child: Padding(
+        padding: EdgeInsets.all(6.r),
+        child: Icon(
+          isFavorite ? PhosphorIconsFill.star : PhosphorIconsRegular.star,
+          size: FactorIcons.smallSize,
+          color: color,
+        ),
+      ),
     );
   }
 }

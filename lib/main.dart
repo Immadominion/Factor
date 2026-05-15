@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:bot_toast/bot_toast.dart';
+import 'package:factor/src/repository.dart';
 import 'package:factor/src/screens.dart';
 import 'package:factor/src/view_model.dart';
 import 'package:factor/view/theme/factor_theme.dart';
@@ -20,6 +21,11 @@ class FactorApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Single PreferencesService instance shared by the calculator singleton
+    // and the view model so persisted state stays in sync.
+    final preferences = PreferencesService();
+    unawaited(ExchangeRateCalculator().bindPreferences(preferences));
+
     return ScreenUtilInit(
       // Design size based on iPhone 14 Pro (393 x 852)
       designSize: const Size(393, 852),
@@ -33,7 +39,9 @@ class FactorApp extends StatelessWidget {
             ),
             ChangeNotifierProvider<ExchangeRateViewModel>(
               create: (_) {
-                final viewModel = ExchangeRateViewModel();
+                final viewModel = ExchangeRateViewModel(
+                  preferencesService: preferences,
+                );
                 unawaited(viewModel.initialize());
                 return viewModel;
               },

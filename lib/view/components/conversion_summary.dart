@@ -1,11 +1,19 @@
+import 'package:factor/cofig/factor_icons.dart';
 import 'package:factor/model/response/fiat_currency_model.dart';
 import 'package:factor/model/response/token_response_model.dart';
 import 'package:factor/view/components/chain_badge.dart';
 import 'package:factor/view/components/neumorphic_card.dart';
+import 'package:factor/view/components/neumorphic_style.dart';
 import 'package:factor/view/components/token_avatar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
+/// Identifies which side of the conversion is on top (the editable input).
+enum SwapTopField { token, currency }
+
+/// Solflare-style swap layout: the top card is always the input, the bottom
+/// card shows the derived amount, and a circular swap button between them
+/// flips which card is on top.
 class ConversionSummary extends StatelessWidget {
   const ConversionSummary({
     super.key,
@@ -14,12 +22,10 @@ class ConversionSummary extends StatelessWidget {
     required this.tokenAmountDisplay,
     required this.fiatAmountDisplay,
     required this.unitPriceDisplay,
+    required this.topField,
     required this.onTokenTap,
     required this.onCurrencyTap,
-    required this.isTokenActive,
-    required this.isCurrencyActive,
-    this.onTokenAmountTap,
-    this.onCurrencyAmountTap,
+    required this.onSwap,
     this.lastUpdatedLabel,
     this.ratesUpdatedLabel,
     this.onRefresh,
@@ -30,12 +36,10 @@ class ConversionSummary extends StatelessWidget {
   final String tokenAmountDisplay;
   final String fiatAmountDisplay;
   final String unitPriceDisplay;
+  final SwapTopField topField;
   final VoidCallback onTokenTap;
   final VoidCallback onCurrencyTap;
-  final bool isTokenActive;
-  final bool isCurrencyActive;
-  final VoidCallback? onTokenAmountTap;
-  final VoidCallback? onCurrencyAmountTap;
+  final VoidCallback onSwap;
   final String? lastUpdatedLabel;
   final String? ratesUpdatedLabel;
   final VoidCallback? onRefresh;
@@ -43,59 +47,84 @@ class ConversionSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isTokenTop = topField == SwapTopField.token;
+
+    final tokenCard = _SwapCard(
+      label: isTokenTop ? 'YOU PAY' : 'YOU GET',
+      amount: tokenAmountDisplay,
+      caption: token?.symbol?.toUpperCase(),
+      isInput: isTokenTop,
+      pill: _TokenPill(token: token, onTap: onTokenTap),
+    );
+
+    final currencyCard = _SwapCard(
+      label: !isTokenTop ? 'YOU PAY' : 'YOU GET',
+      amount: fiatAmountDisplay,
+      caption: currency?.code,
+      isInput: !isTokenTop,
+      pill: _CurrencyPill(currency: currency, onTap: onCurrencyTap),
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _SelectionTile(
-          title: token?.symbol?.toUpperCase() ?? '--',
-          subtitle: token?.name ?? 'Select token',
-          value: tokenAmountDisplay,
-          caption: token?.symbol?.toUpperCase(),
-          isActive: isTokenActive,
-          onTileTap: onTokenTap,
-          onValueTap: onTokenAmountTap,
-          leading: _TokenLeadingWithBadge(token: token),
-        ),
-        const SizedBox(height: 12),
-        _SelectionTile(
-          title: currency?.code ?? '--',
-          subtitle: currency?.name ?? 'Select currency',
-          value: fiatAmountDisplay,
-          caption: currency?.symbol ?? currency?.code,
-          isActive: isCurrencyActive,
-          onTileTap: onCurrencyTap,
-          onValueTap: onCurrencyAmountTap,
+        Stack(
+          alignment: Alignment.center,
+          children: [
+            Column(
+              children: [
+                isTokenTop ? tokenCard : currencyCard,
+                const SizedBox(height: 12),
+                isTokenTop ? currencyCard : tokenCard,
+              ],
+            ),
+            _SwapButton(onTap: onSwap),
+          ],
         ),
         const SizedBox(height: 16),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (lastUpdatedLabel != null)
-              Text(
-                lastUpdatedLabel!,
+            Expanded(
+              child: Text(
+                unitPriceDisplay,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.textTheme.bodySmall?.color?.withValues(
-                    alpha: 0.58,
+                    alpha: 0.6,
                   ),
                 ),
               ),
-            Text(
-              unitPriceDisplay,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.textTheme.bodySmall?.color?.withValues(
-                  alpha: 0.58,
+            ),
+            if (onRefresh != null)
+              GestureDetector(
+                onTap: onRefresh,
+                behavior: HitTestBehavior.opaque,
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 8),
+                  child: Icon(
+                    FactorIcons.refresh,
+                    size: FactorIcons.smallSize,
+                    color: theme.colorScheme.primary.withValues(alpha: 0.8),
+                  ),
                 ),
               ),
-            ),
           ],
         ),
-
+        if (lastUpdatedLabel != null) ...[
+          const SizedBox(height: 4),
+          Text(
+            lastUpdatedLabel!,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.5),
+            ),
+          ),
+        ],
         if (ratesUpdatedLabel != null)
           Text(
             'FX rates: $ratesUpdatedLabel',
             style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.58),
+              color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.5),
             ),
           ),
       ],
@@ -103,199 +132,292 @@ class ConversionSummary extends StatelessWidget {
   }
 }
 
-class _SelectionTile extends StatelessWidget {
-  const _SelectionTile({
-    required this.title,
-    required this.subtitle,
-    required this.value,
-    required this.isActive,
-    required this.onTileTap,
-    this.onValueTap,
-    this.caption,
-    this.leading,
+/// One side of the swap layout. Amount sits on the left, the
+/// token/currency selector pill sits on the right.
+class _SwapCard extends StatelessWidget {
+  const _SwapCard({
+    required this.label,
+    required this.amount,
+    required this.caption,
+    required this.isInput,
+    required this.pill,
   });
 
-  final String title;
-  final String subtitle;
-  final String value;
-  final bool isActive;
-  final VoidCallback onTileTap;
-  final VoidCallback? onValueTap;
+  final String label;
+  final String amount;
   final String? caption;
-  final Widget? leading;
+  final bool isInput;
+  final Widget pill;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final textColor =
-        theme.textTheme.bodyLarge?.color ?? theme.colorScheme.onSurface;
+    final mutedColor = theme.textTheme.bodySmall?.color?.withValues(
+      alpha: 0.55,
+    );
+    final amountBaseColor =
+        theme.textTheme.displaySmall?.color ?? theme.colorScheme.onSurface;
+    final amountColor = isInput
+        ? amountBaseColor
+        : amountBaseColor.withValues(alpha: 0.65);
 
     return NeumorphicCard(
-      isActive: isActive,
-      onTap: onTileTap,
-      borderRadius: 28,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+      borderRadius: 24,
+      padding: const EdgeInsets.fromLTRB(20, 18, 16, 18),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          if (leading != null) ...[leading!, const SizedBox(width: 12)],
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  title,
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    color: textColor,
-                    fontWeight: FontWeight.w700,
-                    height: 1.05,
+                  label,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: mutedColor,
+                    letterSpacing: 1.2,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
-                Text(
-                  subtitle,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: textColor.withValues(alpha: 0.6),
-                    height: 1.2,
+                const SizedBox(height: 8),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 220),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      amount,
+                      style: theme.textTheme.displaySmall?.copyWith(
+                        color: amountColor,
+                        fontWeight: FontWeight.w700,
+                        height: 1.05,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
                   ),
                 ),
+                if (caption != null && caption!.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    caption!,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: mutedColor,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
-          const SizedBox(width: 8),
-          _AmountDisplay(
-            value: value,
-            caption: caption,
-            isActive: isActive,
-            onTap: onValueTap,
-          ),
+          const SizedBox(width: 12),
+          pill,
         ],
       ),
     );
   }
 }
 
-class _AmountDisplay extends StatelessWidget {
-  const _AmountDisplay({
-    required this.value,
-    required this.isActive,
-    this.caption,
-    this.onTap,
-  });
-
-  final String value;
-  final bool isActive;
-  final String? caption;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final valueStyle = theme.textTheme.displaySmall?.copyWith(
-      fontWeight: FontWeight.w700,
-      letterSpacing: -0.2,
-      height: 1.1,
-    );
-
-    Widget content = Column(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        SizedBox(
-          height: 16,
-          child: AnimatedOpacity(
-            opacity: isActive ? 1 : 0,
-            duration: const Duration(milliseconds: 200),
-            child: const _ActiveBadge(),
-          ),
-        ),
-        const SizedBox(height: 4),
-        ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 150),
-          child: FittedBox(
-            alignment: Alignment.centerRight,
-            fit: BoxFit.scaleDown,
-            child: Text(value, style: valueStyle),
-          ),
-        ),
-      ],
-    );
-
-    if (onTap != null) {
-      content = GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: content,
-      );
-    }
-
-    return content;
-  }
-}
-
-class _ActiveBadge extends StatelessWidget {
-  const _ActiveBadge();
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final baseColor = theme.colorScheme.primary;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: baseColor.withValues(
-          alpha: theme.brightness == Brightness.dark ? 0.24 : 0.2,
-        ),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 5,
-            height: 5,
-            decoration: BoxDecoration(color: baseColor, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 5),
-          Text(
-            'Typing',
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.primary,
-              fontWeight: FontWeight.w600,
-              height: .5,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Token avatar with chain badge overlay for non-Solana tokens
-class _TokenLeadingWithBadge extends StatelessWidget {
-  const _TokenLeadingWithBadge({required this.token});
+class _TokenPill extends StatelessWidget {
+  const _TokenPill({required this.token, required this.onTap});
 
   final TokenResponseModel? token;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    if (token == null) {
-      return TokenAvatar(imageUrl: null, symbol: null, size: 36);
-    }
-
-    return SizedBox(
-      width: 44.r,
-      height: 36.r,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          TokenAvatar(imageUrl: token!.icon, symbol: token!.symbol, size: 36),
-          // Chain badge positioned at bottom-right of avatar
-          if (!token!.isSolana)
-            Positioned(
-              right: -4.r,
-              bottom: -4.r,
-              child: ChainBadge(token: token!),
+    final theme = Theme.of(context);
+    final symbol = token?.symbol?.toUpperCase() ?? 'Select';
+    return _PillShell(
+      onTap: onTap,
+      leading: SizedBox(
+        width: 32.r,
+        height: 28.r,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            TokenAvatar(
+              imageUrl: token?.icon,
+              symbol: token?.symbol,
+              size: 28,
             ),
-        ],
+            if (token != null && !token!.isSolana)
+              Positioned(
+                right: -4.r,
+                bottom: -4.r,
+                child: ChainBadge(token: token!),
+              ),
+          ],
+        ),
+      ),
+      label: Text(
+        symbol,
+        style: theme.textTheme.titleMedium?.copyWith(
+          fontWeight: FontWeight.w700,
+        ),
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
+  }
+}
+
+class _CurrencyPill extends StatelessWidget {
+  const _CurrencyPill({required this.currency, required this.onTap});
+
+  final FiatCurrency? currency;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final code = currency?.code ?? 'Select';
+    final symbol = currency?.symbol ?? code;
+    final glyph = symbol.length > 2 ? code.substring(0, 1) : symbol;
+    return _PillShell(
+      onTap: onTap,
+      leading: Container(
+        width: 28.r,
+        height: 28.r,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: theme.colorScheme.primary.withValues(alpha: 0.16),
+        ),
+        child: Text(
+          glyph,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            fontWeight: FontWeight.w700,
+            color: theme.colorScheme.primary,
+          ),
+        ),
+      ),
+      label: Text(
+        code,
+        style: theme.textTheme.titleMedium?.copyWith(
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+class _PillShell extends StatefulWidget {
+  const _PillShell({
+    required this.onTap,
+    required this.leading,
+    required this.label,
+  });
+
+  final VoidCallback onTap;
+  final Widget leading;
+  final Widget label;
+
+  @override
+  State<_PillShell> createState() => _PillShellState();
+}
+
+class _PillShellState extends State<_PillShell> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final decoration = NeumorphicStyle.outerDecoration(
+      context,
+      borderRadius: 18,
+      isPressed: _pressed,
+    );
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapCancel: () => setState(() => _pressed = false),
+      onTapUp: (_) {
+        setState(() => _pressed = false);
+        widget.onTap();
+      },
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 140),
+        curve: Curves.easeOut,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: decoration,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            widget.leading,
+            const SizedBox(width: 8),
+            widget.label,
+            const SizedBox(width: 4),
+            Icon(
+              FactorIcons.chevronDown,
+              size: FactorIcons.smallSize,
+              color: theme.iconTheme.color?.withValues(alpha: 0.7),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SwapButton extends StatefulWidget {
+  const _SwapButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  State<_SwapButton> createState() => _SwapButtonState();
+}
+
+class _SwapButtonState extends State<_SwapButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 320),
+  );
+
+  bool _pressed = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _handleTap() {
+    _controller.forward(from: 0);
+    widget.onTap();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapCancel: () => setState(() => _pressed = false),
+      onTapUp: (_) {
+        setState(() => _pressed = false);
+        _handleTap();
+      },
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 140),
+        curve: Curves.easeOut,
+        width: 48,
+        height: 48,
+        decoration: NeumorphicStyle.outerDecoration(
+          context,
+          borderRadius: 24,
+          isPressed: _pressed,
+        ),
+        alignment: Alignment.center,
+        child: RotationTransition(
+          turns: Tween<double>(begin: 0, end: 0.5).animate(
+            CurvedAnimation(parent: _controller, curve: Curves.easeOutBack),
+          ),
+          child: Icon(
+            FactorIcons.swap,
+            size: 22.r,
+            color: theme.colorScheme.primary,
+          ),
+        ),
       ),
     );
   }

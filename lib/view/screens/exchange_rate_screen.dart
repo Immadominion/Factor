@@ -14,6 +14,11 @@ import 'package:provider/provider.dart';
 
 enum ActiveAmountField { token, currency }
 
+SwapTopField _toSwapTopField(ActiveAmountField field) =>
+    field == ActiveAmountField.token
+        ? SwapTopField.token
+        : SwapTopField.currency;
+
 class _KeypadGridCell {
   const _KeypadGridCell({
     required this.value,
@@ -44,9 +49,6 @@ class _ExchangeRateScreenState extends State<ExchangeRateScreen> {
   String _fiatAmountDigits = '0';
   bool _currencyDigitsMaxed = false;
   FiatCurrency? _lastCurrency;
-
-  DateTime? _lastTokenAmountTapAt;
-  DateTime? _lastCurrencyAmountTapAt;
 
   @override
   Widget build(BuildContext context) {
@@ -128,18 +130,10 @@ class _ExchangeRateScreenState extends State<ExchangeRateScreen> {
       tokenAmountDisplay: tokenDisplay,
       fiatAmountDisplay: fiatDisplay,
       unitPriceDisplay: unitPriceDisplay,
+      topField: _toSwapTopField(_activeField),
       onTokenTap: () => _openCoinSelector(viewModel),
       onCurrencyTap: () => _openCurrencySelector(viewModel),
-      isTokenActive: _activeField == ActiveAmountField.token,
-      isCurrencyActive: _activeField == ActiveAmountField.currency,
-      onTokenAmountTap: () => _handleAmountAreaTap(
-        field: ActiveAmountField.token,
-        viewModel: viewModel,
-      ),
-      onCurrencyAmountTap: () => _handleAmountAreaTap(
-        field: ActiveAmountField.currency,
-        viewModel: viewModel,
-      ),
+      onSwap: () => _toggleActiveField(viewModel),
       lastUpdatedLabel: lastUpdatedLabel,
       ratesUpdatedLabel: viewModel.ratesLastUpdatedLabel,
       onRefresh: viewModel.refreshPrice,
@@ -349,7 +343,6 @@ class _ExchangeRateScreenState extends State<ExchangeRateScreen> {
   }
 
   Future<void> _openCoinSelector(ExchangeRateViewModel viewModel) async {
-    _activateField(ActiveAmountField.token, viewModel);
     await showNeumorphicModalSheet(
       context: context,
       builder: (_) => const SelectCoinScreen(),
@@ -357,64 +350,34 @@ class _ExchangeRateScreenState extends State<ExchangeRateScreen> {
   }
 
   Future<void> _openCurrencySelector(ExchangeRateViewModel viewModel) async {
-    _activateField(ActiveAmountField.currency, viewModel);
     await showNeumorphicModalSheet(
       context: context,
       builder: (_) => const SelectCurrencyScreen(),
     );
   }
 
-  void _activateField(
-    ActiveAmountField field,
-    ExchangeRateViewModel viewModel,
-  ) {
-    if (_activeField == field && field == ActiveAmountField.token) {
-      return;
+  /// Flips which side of the conversion is on top (the input). The amount
+  /// values themselves stay correct because the bottom card is always derived
+  /// from the top card via [ExchangeRateViewModel].
+  void _toggleActiveField(ExchangeRateViewModel viewModel) {
+    if (_exchangeRateProvider.hapticsEnabled) {
+      HapticFeedback.selectionClick();
     }
     setState(() {
-      _activeField = field;
-      if (field == ActiveAmountField.currency) {
+      if (_activeField == ActiveAmountField.token) {
+        _activeField = ActiveAmountField.currency;
+        // Switching to currency input: seed the editable digits with the
+        // currently displayed fiat value so the user picks up where the math
+        // left off.
         final synced = viewModel.convertTokenAmount(
           _exchangeRateProvider.coinAmountDigits,
         );
         _fiatAmountDigits = _formatEditableNumber(synced);
         _currencyDigitsMaxed = false;
+      } else {
+        _activeField = ActiveAmountField.token;
       }
     });
-  }
-
-  Future<void> _handleAmountAreaTap({
-    required ActiveAmountField field,
-    required ExchangeRateViewModel viewModel,
-  }) async {
-    const doubleTapWindow = Duration(milliseconds: 450);
-    final now = DateTime.now();
-
-    final wasActive = _activeField == field;
-    final lastTap = field == ActiveAmountField.token
-        ? _lastTokenAmountTapAt
-        : _lastCurrencyAmountTapAt;
-    final isQuickSecondTap =
-        wasActive &&
-        lastTap != null &&
-        now.difference(lastTap) <= doubleTapWindow;
-
-    if (field == ActiveAmountField.token) {
-      _lastTokenAmountTapAt = now;
-    } else {
-      _lastCurrencyAmountTapAt = now;
-    }
-
-    if (isQuickSecondTap) {
-      if (field == ActiveAmountField.token) {
-        await _openCoinSelector(viewModel);
-      } else {
-        await _openCurrencySelector(viewModel);
-      }
-      return;
-    }
-
-    _activateField(field, viewModel);
   }
 
   String _formatEditableNumber(double value) {
